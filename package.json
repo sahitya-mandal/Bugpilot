@@ -1,7 +1,10 @@
-﻿{
-  "name": "bugpilot",
+{
+  "name": "bugpilot-root",
   "private": true,
+  "workspaces": [
+    "frontend"
+  ],
   "scripts": {
-    "build": "cd frontend && npm install && npm run build"
+    "build": "npm run build --workspace=frontend"
   }
 }

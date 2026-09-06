@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -10,15 +10,12 @@ import {
   Box,
   CircularProgress,
   Alert,
-  Tabs,
-  Tab,
   IconButton,
-  Divider,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import GitHubIcon from '@mui/icons-material/GitHub';
-import AddBoxIcon from '@mui/icons-material/AddBox';
 import repositoryService from '../services/repositoryService';
+import { parseGitHubUrl } from '../utils/githubUrl';
 import type { Repository } from '../types';
 
 interface ImportRepoDialogProps {
@@ -32,15 +29,13 @@ export const ImportRepoDialog: React.FC<ImportRepoDialogProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const [tab, setTab] = useState<number>(0);
-  const [owner, setOwner] = useState<string>('');
-  const [name, setName] = useState<string>('');
+  const [repoUrl, setRepoUrl] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const pollTimerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     return () => {
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);
@@ -53,8 +48,7 @@ export const ImportRepoDialog: React.FC<ImportRepoDialogProps> = ({
       clearInterval(pollTimerRef.current);
       pollTimerRef.current = null;
     }
-    setOwner('');
-    setName('');
+    setRepoUrl('');
     setError(null);
     setStatusMessage(null);
     setLoading(false);
@@ -63,103 +57,90 @@ export const ImportRepoDialog: React.FC<ImportRepoDialogProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!owner.trim() || !name.trim()) {
-      setError('Owner and repository name are required.');
+
+    const parsed = parseGitHubUrl(repoUrl);
+    if (!parsed) {
+      setError('Please enter a valid GitHub repository URL (e.g. https://github.com/owner/repository).');
       return;
     }
 
+    const { owner, name } = parsed;
+
     setLoading(true);
     setError(null);
-    setStatusMessage(null);
+    setStatusMessage('Initiating repository import...');
 
     try {
-      if (tab === 0) {
-        // GitHub Import
-        const job = await repositoryService.importRepo({
-          owner: owner.trim(),
-          name: name.trim(),
-        });
+      const job = await repositoryService.importRepo({
+        owner,
+        name,
+      });
 
-        setStatusMessage('Import queued. Tracking background synchronization...');
+      setStatusMessage('Import queued. Tracking background synchronization...');
 
-        if (pollTimerRef.current) {
-          clearInterval(pollTimerRef.current);
-        }
-
-        pollTimerRef.current = setInterval(async () => {
-          try {
-            const updatedJob = await repositoryService.getSyncJob(job.jobId);
-            if (updatedJob.status === 'COMPLETED') {
-              if (pollTimerRef.current) {
-                clearInterval(pollTimerRef.current);
-                pollTimerRef.current = null;
-              }
-              const repo = await repositoryService.getById(job.repositoryId);
-              onSuccess(repo);
-              handleClose();
-            } else if (updatedJob.status === 'FAILED') {
-              if (pollTimerRef.current) {
-                clearInterval(pollTimerRef.current);
-                pollTimerRef.current = null;
-              }
-              setLoading(false);
-              const rateInfo = updatedJob.rateLimitReset
-                ? ` Rate limit resets at ${new Date(updatedJob.rateLimitReset * 1000).toLocaleTimeString()}.`
-                : '';
-              setError((updatedJob.errorMessage || 'Failed to import repository.') + rateInfo);
-              setStatusMessage(null);
-            } else {
-              setStatusMessage(`Import ${updatedJob.status}: ${updatedJob.currentStep}...`);
-            }
-          } catch {
-            // Keep polling
-          }
-        }, 2000);
-
-      } else {
-        // Manual Create
-        const repo = await repositoryService.create({
-          owner: owner.trim(),
-          name: name.trim(),
-        });
-        onSuccess(repo);
-        handleClose();
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
       }
-    } catch (err: any) {
+
+      pollTimerRef.current = setInterval(async () => {
+        try {
+          const updatedJob = await repositoryService.getSyncJob(job.jobId);
+          if (updatedJob.status === 'COMPLETED') {
+            if (pollTimerRef.current) {
+              clearInterval(pollTimerRef.current);
+              pollTimerRef.current = null;
+            }
+            const repo = await repositoryService.getById(job.repositoryId);
+            onSuccess(repo);
+            handleClose();
+          } else if (updatedJob.status === 'FAILED') {
+            if (pollTimerRef.current) {
+              clearInterval(pollTimerRef.current);
+              pollTimerRef.current = null;
+            }
+            setLoading(false);
+            const rateInfo = updatedJob.rateLimitReset
+              ? ` Rate limit resets at ${new Date(updatedJob.rateLimitReset * 1000).toLocaleTimeString()}.`
+              : '';
+            setError((updatedJob.errorMessage || 'Failed to import repository.') + rateInfo);
+            setStatusMessage(null);
+          } else {
+            setStatusMessage(`Import ${updatedJob.status}: ${updatedJob.currentStep}...`);
+          }
+        } catch {
+          // Keep polling on transient network hiccup
+        }
+      }, 2000);
+    } catch (err: unknown) {
       setLoading(false);
       setStatusMessage(null);
-      const backendMsg = err?.response?.data?.message;
+      const maybeAxiosErr = err as { response?: { data?: { message?: string } }; message?: string };
+      const backendMsg = maybeAxiosErr?.response?.data?.message;
       const message =
         backendMsg ||
-        (err instanceof Error
-          ? err.message
-          : 'Failed to import repository. Please verify the owner and name, and check backend logs.');
+        (maybeAxiosErr?.message
+          ? maybeAxiosErr.message
+          : 'Failed to import repository. Please verify the URL and backend connectivity.');
       setError(message);
     }
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ m: 0, p: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h6" component="span" sx={{ fontWeight: 600 }}>
-          {tab === 0 ? 'Import from GitHub' : 'Track Custom Repository'}
-        </Typography>
-        <IconButton onClick={handleClose} size="small" disabled={loading}>
-          <CloseIcon />
+    <Dialog open={open} onClose={loading ? undefined : handleClose} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ m: 0, px: 3, py: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+          <GitHubIcon sx={{ fontSize: 22, color: 'text.primary' }} />
+          <Typography variant="h6" component="span" sx={{ fontWeight: 600, fontSize: '1.1rem' }}>
+            Import GitHub Repository
+          </Typography>
+        </Box>
+        <IconButton onClick={handleClose} size="small" disabled={loading} sx={{ color: 'text.secondary' }}>
+          <CloseIcon fontSize="small" />
         </IconButton>
       </DialogTitle>
 
-      <Tabs
-        value={tab}
-        onChange={(_, val) => setTab(val)}
-        sx={{ px: 2.5, borderBottom: 1, borderColor: 'divider' }}
-      >
-        <Tab icon={<GitHubIcon fontSize="small" />} iconPosition="start" label="GitHub Import & Sync" />
-        <Tab icon={<AddBoxIcon fontSize="small" />} iconPosition="start" label="Manual Registry" />
-      </Tabs>
-
       <form onSubmit={handleSubmit}>
-        <DialogContent sx={{ p: 3 }}>
+        <DialogContent sx={{ px: 3, pt: 1, pb: 3 }}>
           {error && (
             <Alert severity="error" sx={{ mb: 2.5 }} onClose={() => setError(null)}>
               {error}
@@ -168,42 +149,31 @@ export const ImportRepoDialog: React.FC<ImportRepoDialogProps> = ({
 
           {statusMessage && (
             <Alert severity="info" sx={{ mb: 2.5 }}>
-              {statusMessage}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                {loading && <CircularProgress size={16} color="inherit" />}
+                <Typography variant="body2">{statusMessage}</Typography>
+              </Box>
             </Alert>
           )}
 
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            {tab === 0
-              ? 'Enter the GitHub repository coordinates. BugPilot will automatically fetch repository metadata, open issues, pull requests, and commit velocity.'
-              : 'Manually register a code repository into BugPilot intelligence system.'}
-          </Typography>
-
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            <TextField
-              label="Repository Owner / Organization"
-              placeholder="e.g. octocat, facebook, google"
-              value={owner}
-              onChange={(e) => setOwner(e.target.value)}
-              required
-              fullWidth
-              disabled={loading}
-              autoFocus
-            />
-            <TextField
-              label="Repository Name"
-              placeholder="e.g. Spoon-Knife, react, guice"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              fullWidth
-              disabled={loading}
-            />
-          </Box>
+          <TextField
+            label="GitHub Repository URL"
+            placeholder="https://github.com/owner/repository"
+            helperText="Paste the URL of a GitHub repository you want to analyze."
+            value={repoUrl}
+            onChange={(e) => {
+              setRepoUrl(e.target.value);
+              if (error) setError(null);
+            }}
+            required
+            fullWidth
+            disabled={loading}
+            autoFocus
+            sx={{ mt: 1 }}
+          />
         </DialogContent>
 
-        <Divider />
-
-        <DialogActions sx={{ p: 2 }}>
+        <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid', borderColor: 'divider' }}>
           <Button onClick={handleClose} disabled={loading} color="inherit">
             Cancel
           </Button>
@@ -211,16 +181,10 @@ export const ImportRepoDialog: React.FC<ImportRepoDialogProps> = ({
             type="submit"
             variant="contained"
             color="primary"
-            disabled={loading || !owner.trim() || !name.trim()}
-            startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <GitHubIcon />}
+            disabled={loading || !repoUrl.trim()}
+            startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <GitHubIcon fontSize="small" />}
           >
-            {loading
-              ? tab === 0
-                ? 'Importing & Syncing...'
-                : 'Creating...'
-              : tab === 0
-              ? 'Import Repository'
-              : 'Register'}
+            {loading ? 'Importing Repository...' : 'Import Repository'}
           </Button>
         </DialogActions>
       </form>

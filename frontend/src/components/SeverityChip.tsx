@@ -13,7 +13,7 @@ interface SeverityChipProps {
 
 export const SeverityChip: React.FC<SeverityChipProps> = ({ severity, size = 'small' }) => {
   if (!severity) {
-    return <Chip label="Not Analyzed" size={size} variant="outlined" sx={{ color: 'text.secondary', borderColor: 'divider' }} />;
+    return <Chip label="Not Analyzed" size={size} variant="outlined" sx={{ color: 'text.secondary', borderColor: 'divider', borderRadius: 1 }} />;
   }
 
   const sevUpper = severity.toUpperCase();
@@ -26,10 +26,12 @@ export const SeverityChip: React.FC<SeverityChipProps> = ({ severity, size = 'sm
           label="CRITICAL"
           size={size}
           sx={{
-            backgroundColor: 'rgba(239, 68, 68, 0.15)',
-            color: '#EF4444',
-            border: '1px solid rgba(239, 68, 68, 0.4)',
-            fontWeight: 700,
+            backgroundColor: 'rgba(248, 81, 73, 0.15)',
+            color: '#ff7b72',
+            border: '1px solid rgba(248, 81, 73, 0.4)',
+            fontWeight: 600,
+            borderRadius: 1,
+            '& .MuiChip-icon': { color: '#ff7b72' },
           }}
         />
       );
@@ -40,10 +42,12 @@ export const SeverityChip: React.FC<SeverityChipProps> = ({ severity, size = 'sm
           label="HIGH"
           size={size}
           sx={{
-            backgroundColor: 'rgba(249, 115, 22, 0.15)',
-            color: '#F97316',
-            border: '1px solid rgba(249, 115, 22, 0.4)',
-            fontWeight: 700,
+            backgroundColor: 'rgba(219, 109, 40, 0.15)',
+            color: '#f0883e',
+            border: '1px solid rgba(219, 109, 40, 0.4)',
+            fontWeight: 600,
+            borderRadius: 1,
+            '& .MuiChip-icon': { color: '#f0883e' },
           }}
         />
       );
@@ -54,10 +58,12 @@ export const SeverityChip: React.FC<SeverityChipProps> = ({ severity, size = 'sm
           label="MEDIUM"
           size={size}
           sx={{
-            backgroundColor: 'rgba(245, 158, 11, 0.15)',
-            color: '#F59E0B',
-            border: '1px solid rgba(245, 158, 11, 0.4)',
+            backgroundColor: 'rgba(210, 153, 34, 0.15)',
+            color: '#e3b341',
+            border: '1px solid rgba(210, 153, 34, 0.4)',
             fontWeight: 600,
+            borderRadius: 1,
+            '& .MuiChip-icon': { color: '#e3b341' },
           }}
         />
       );
@@ -69,10 +75,12 @@ export const SeverityChip: React.FC<SeverityChipProps> = ({ severity, size = 'sm
           label="LOW"
           size={size}
           sx={{
-            backgroundColor: 'rgba(16, 185, 129, 0.15)',
-            color: '#10B981',
-            border: '1px solid rgba(16, 185, 129, 0.4)',
+            backgroundColor: 'rgba(46, 160, 67, 0.15)',
+            color: '#3fb950',
+            border: '1px solid rgba(46, 160, 67, 0.4)',
             fontWeight: 600,
+            borderRadius: 1,
+            '& .MuiChip-icon': { color: '#3fb950' },
           }}
         />
       );

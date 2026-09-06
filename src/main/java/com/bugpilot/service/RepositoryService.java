@@ -3,10 +3,17 @@ package com.bugpilot.service;
 import com.bugpilot.dto.RepositoryRequest;
 import com.bugpilot.dto.RepositoryResponse;
 import com.bugpilot.entity.Repository;
+import com.bugpilot.entity.SyncJob;
 import com.bugpilot.entity.User;
+import com.bugpilot.enums.Role;
+import com.bugpilot.enums.SyncJobStatus;
+import com.bugpilot.exception.ConcurrentSyncException;
 import com.bugpilot.exception.ResourceNotFoundException;
+import com.bugpilot.repository.ActivityRepository;
 import com.bugpilot.repository.RepoRepository;
+import com.bugpilot.repository.SyncJobRepository;
 import com.bugpilot.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,10 +29,19 @@ public class RepositoryService {
 
     private final RepoRepository repoRepository;
     private final UserRepository userRepository;
+    private final ActivityRepository activityRepository;
+    private final SyncJobRepository syncJobRepository;
 
-    public RepositoryService(RepoRepository repoRepository, UserRepository userRepository) {
+    @Autowired
+    public RepositoryService(
+            RepoRepository repoRepository,
+            UserRepository userRepository,
+            ActivityRepository activityRepository,
+            SyncJobRepository syncJobRepository) {
         this.repoRepository = repoRepository;
         this.userRepository = userRepository;
+        this.activityRepository = activityRepository;
+        this.syncJobRepository = syncJobRepository;
     }
 
     public RepositoryResponse createRepository(RepositoryRequest request, String userEmail) {
@@ -36,9 +52,18 @@ public class RepositoryService {
                     .orElse(null);
         }
 
-        String fullName = request.getOwner() + "/" + request.getName();
+        String owner = request.getOwner() != null ? request.getOwner().trim() : "";
+        String name = request.getName() != null ? request.getName().trim() : "";
+        if (owner.contains("/")) {
+            throw new IllegalArgumentException("Repository owner must not contain '/'");
+        }
+        if (name.contains("/")) {
+            throw new IllegalArgumentException("Repository name must not contain '/'");
+        }
 
-        Optional<Repository> existing = repoRepository.findByOwnerAndName(request.getOwner(), request.getName());
+        String fullName = owner + "/" + name;
+
+        Optional<Repository> existing = repoRepository.findByOwnerAndName(owner, name);
         if (existing.isPresent()) {
             Repository existingRepo = existing.get();
             if (existingRepo.getUser() != null && (user == null || !existingRepo.getUser().getId().equals(user.getId()))) {
@@ -82,7 +107,8 @@ public class RepositoryService {
                 .orElseThrow(() -> new AccessDeniedException("Access denied: user not found"));
 
         boolean isOwner = repository.getUser() != null && repository.getUser().getId().equals(user.getId());
-        if (!isOwner) {
+        boolean isAdmin = user.getRole() == Role.ADMIN;
+        if (!isOwner && !isAdmin) {
             throw new AccessDeniedException("Access denied: You do not own this repository");
         }
 
@@ -125,14 +151,68 @@ public class RepositoryService {
         return mapToResponse(repository);
     }
 
+    @Transactional
     public void deleteRepository(Long id, String userEmail) {
         Repository repository = getRepositoryEntityForUser(id, userEmail);
+
+        // 1. Concurrency guard: reject if sync is actively IN_PROGRESS
+        Optional<SyncJob> inProgressJob = syncJobRepository.findFirstByRepositoryIdAndStatusOrderByCreatedAtDesc(id, SyncJobStatus.IN_PROGRESS);
+        if (inProgressJob.isPresent()) {
+            throw new ConcurrentSyncException(
+                    "Cannot delete repository while synchronization is in progress. Please wait for sync to complete.",
+                    inProgressJob.get().getId());
+        }
+
+        // 2. Safely handle any QUEUED / stale sync jobs before removal
+        List<SyncJob> queuedJobs = syncJobRepository.findByRepositoryIdAndStatus(id, SyncJobStatus.QUEUED);
+        for (SyncJob queued : queuedJobs) {
+            queued.setStatus(SyncJobStatus.CANCELLED);
+            queued.setErrorMessage("Repository deleted before sync started.");
+        }
+        if (!queuedJobs.isEmpty()) {
+            syncJobRepository.saveAll(queuedJobs);
+        }
+
+        // 3. Delete Activity records referencing this repository
+        activityRepository.deleteByRepositoryId(id);
+
+        // 4. Delete SyncJob records referencing this repository
+        syncJobRepository.deleteByRepositoryId(id);
+
+        // 5. Delete the Repository entity (cascades to issues -> bug_analyses, pull_requests -> pull_request_analyses, commits)
         repoRepository.delete(repository);
     }
 
+    @Transactional
     public void deleteRepository(Long id) {
         Repository repository = repoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Repository", id));
+
+        // 1. Concurrency guard: reject if sync is actively IN_PROGRESS
+        Optional<SyncJob> inProgressJob = syncJobRepository.findFirstByRepositoryIdAndStatusOrderByCreatedAtDesc(id, SyncJobStatus.IN_PROGRESS);
+        if (inProgressJob.isPresent()) {
+            throw new ConcurrentSyncException(
+                    "Cannot delete repository while synchronization is in progress. Please wait for sync to complete.",
+                    inProgressJob.get().getId());
+        }
+
+        // 2. Safely handle any QUEUED / stale sync jobs before removal
+        List<SyncJob> queuedJobs = syncJobRepository.findByRepositoryIdAndStatus(id, SyncJobStatus.QUEUED);
+        for (SyncJob queued : queuedJobs) {
+            queued.setStatus(SyncJobStatus.CANCELLED);
+            queued.setErrorMessage("Repository deleted before sync started.");
+        }
+        if (!queuedJobs.isEmpty()) {
+            syncJobRepository.saveAll(queuedJobs);
+        }
+
+        // 3. Delete Activity records referencing this repository
+        activityRepository.deleteByRepositoryId(id);
+
+        // 4. Delete SyncJob records referencing this repository
+        syncJobRepository.deleteByRepositoryId(id);
+
+        // 5. Delete the Repository entity
         repoRepository.delete(repository);
     }
 

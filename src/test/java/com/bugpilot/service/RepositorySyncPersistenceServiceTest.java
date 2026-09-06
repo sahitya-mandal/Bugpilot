@@ -346,4 +346,30 @@ class RepositorySyncPersistenceServiceTest {
         verify(commitRepository, never()).findByRepositoryIdAndSha(anyLong(), anyString());
         verify(commitRepository, never()).saveAll(any());
     }
+
+    @Test
+    void findJobByIdWithAssociations_delegatesToRepositoryWithAssociations() {
+        com.bugpilot.entity.SyncJob job = new com.bugpilot.entity.SyncJob();
+        job.setId(42L);
+        when(syncJobRepository.findByIdWithAssociations(42L)).thenReturn(Optional.of(job));
+
+        com.bugpilot.entity.SyncJob result = persistenceService.findJobByIdWithAssociations(42L);
+
+        assertNotNull(result);
+        assertEquals(42L, result.getId());
+        verify(syncJobRepository).findByIdWithAssociations(42L);
+    }
+
+    @Test
+    void findJobById_delegatesToRepositoryWithAssociations() {
+        com.bugpilot.entity.SyncJob job = new com.bugpilot.entity.SyncJob();
+        job.setId(42L);
+        when(syncJobRepository.findByIdWithAssociations(42L)).thenReturn(Optional.of(job));
+
+        com.bugpilot.entity.SyncJob result = persistenceService.findJobById(42L);
+
+        assertNotNull(result);
+        assertEquals(42L, result.getId());
+        verify(syncJobRepository).findByIdWithAssociations(42L);
+    }
 }

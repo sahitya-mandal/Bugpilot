@@ -52,8 +52,13 @@ public class RepositorySyncPersistenceService {
     }
 
     @Transactional(readOnly = true)
+    public SyncJob findJobByIdWithAssociations(Long jobId) {
+        return syncJobRepository.findByIdWithAssociations(jobId).orElse(null);
+    }
+
+    @Transactional(readOnly = true)
     public SyncJob findJobById(Long jobId) {
-        return syncJobRepository.findById(jobId).orElse(null);
+        return syncJobRepository.findByIdWithAssociations(jobId).orElse(null);
     }
 
     public SyncJob markJobInProgress(Long jobId) {

@@ -28,15 +28,12 @@ import CallSplitIcon from '@mui/icons-material/CallSplit';
 import BugReportIcon from '@mui/icons-material/BugReportOutlined';
 import FolderSpecialIcon from '@mui/icons-material/FolderSpecialOutlined';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-
-import { useAuth } from '../context/AuthContext';
 import repositoryService from '../services/repositoryService';
 import EmptyState from '../components/EmptyState';
 import ImportRepoDialog from '../components/ImportRepoDialog';
 import type { Repository } from '../types';
 
 export const RepositoriesPage: React.FC = () => {
-  const { isAdmin } = useAuth();
   const navigate = useNavigate();
 
   const [repositories, setRepositories] = useState<Repository[]>([]);
@@ -189,7 +186,7 @@ export const RepositoriesPage: React.FC = () => {
           startIcon={<AddIcon />}
           onClick={() => setImportDialogOpen(true)}
         >
-          Track Repository
+          Import Repository
         </Button>
       </Box>
 
@@ -215,28 +212,28 @@ export const RepositoriesPage: React.FC = () => {
           fullWidth
           slotProps={{
             input: {
-              startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+              startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary', fontSize: 20 }} />,
             },
           }}
-          sx={{ maxWidth: 500 }}
+          sx={{ maxWidth: 480 }}
         />
       </Box>
 
       {/* Repositories Cards Grid */}
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-          <CircularProgress />
+          <CircularProgress size={32} />
         </Box>
       ) : filteredRepos.length === 0 ? (
         <EmptyState
-          icon={<FolderSpecialIcon sx={{ fontSize: 56 }} />}
+          icon={<FolderSpecialIcon sx={{ fontSize: 48 }} />}
           title={searchTerm ? 'No Repositories Match Your Search' : 'No Repositories Tracked Yet'}
           description={
             searchTerm
               ? 'Try adjusting your search query or clear the filter.'
               : 'Import repositories from GitHub to start indexing issues, pull requests, and commits.'
           }
-          actionText={searchTerm ? 'Clear Search' : 'Track Repository'}
+          actionText={searchTerm ? 'Clear Search' : 'Import Repository'}
           onAction={() => (searchTerm ? setSearchTerm('') : setImportDialogOpen(true))}
         />
       ) : (
@@ -244,7 +241,7 @@ export const RepositoriesPage: React.FC = () => {
           sx={{
             display: 'grid',
             gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' },
-            gap: 2.5,
+            gap: 2,
           }}
         >
           {filteredRepos.map((repo) => (
@@ -256,30 +253,42 @@ export const RepositoriesPage: React.FC = () => {
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
-                transition: 'all 0.2s ease',
+                backgroundColor: '#161b22',
+                border: '1px solid #30363d',
+                borderRadius: 1.5,
+                boxShadow: 'none',
+                transition: 'border-color 0.15s ease',
                 '&:hover': {
-                  borderColor: 'primary.main',
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 8px 24px -4px rgba(0, 0, 0, 0.4)',
+                  borderColor: '#8b949e',
                 },
               }}
             >
               <CardContent sx={{ p: 2.5 }}>
                 {/* Title & Actions */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 700, color: 'primary.light', lineHeight: 1.3 }}>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontWeight: 600,
+                      color: '#f0f6fc',
+                      lineHeight: 1.3,
+                      fontSize: '0.95rem',
+                      '&:hover': { color: 'primary.light' },
+                    }}
+                  >
                     {repo.fullName || `${repo.owner}/${repo.name}`}
                   </Typography>
 
-                  <Box sx={{ display: 'flex', gap: 0.5 }} onClick={(e) => e.stopPropagation()}>
+                  <Box sx={{ display: 'flex', gap: 0.5, ml: 1 }} onClick={(e) => e.stopPropagation()}>
                     <Tooltip title="Sync with GitHub">
                       <IconButton
                         size="small"
                         onClick={(e) => handleSync(repo.id, e)}
                         disabled={syncingId === repo.id}
+                        sx={{ color: 'text.secondary' }}
                       >
                         {syncingId === repo.id ? (
-                          <CircularProgress size={16} />
+                          <CircularProgress size={14} />
                         ) : (
                           <SyncIcon fontSize="small" />
                         )}
@@ -294,23 +303,25 @@ export const RepositoriesPage: React.FC = () => {
                           href={repo.htmlUrl}
                           target="_blank"
                           rel="noopener noreferrer"
+                          sx={{ color: 'text.secondary' }}
                         >
                           <OpenInNewIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                     )}
 
-                    {isAdmin && (
-                      <Tooltip title="Delete Repository (Admin)">
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={(e) => confirmDelete(repo, e)}
-                        >
-                          <DeleteOutlinedIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    )}
+                    <Tooltip title="Delete repository">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => confirmDelete(repo, e)}
+                        sx={{
+                          color: 'text.secondary',
+                          '&:hover': { color: 'error.main', bgcolor: 'rgba(248, 81, 73, 0.1)' },
+                        }}
+                      >
+                        <DeleteOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                   </Box>
                 </Box>
 
@@ -319,12 +330,13 @@ export const RepositoriesPage: React.FC = () => {
                   variant="body2"
                   color="text.secondary"
                   sx={{
-                    mb: 2.5,
-                    minHeight: 40,
+                    mb: 2,
+                    minHeight: 38,
                     display: '-webkit-box',
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: 'vertical',
                     overflow: 'hidden',
+                    fontSize: '0.8rem',
                   }}
                 >
                   {repo.description || 'No description provided.'}
@@ -333,20 +345,20 @@ export const RepositoriesPage: React.FC = () => {
                 {/* Stats / Badges */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 2 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <StarBorderIcon fontSize="small" sx={{ color: '#F59E0B' }} />
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    <StarBorderIcon fontSize="small" sx={{ color: '#d29922', fontSize: 16 }} />
+                    <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
                       {repo.stargazersCount || 0}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <CallSplitIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    <CallSplitIcon fontSize="small" sx={{ color: 'text.secondary', fontSize: 16 }} />
+                    <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
                       {repo.forksCount || 0}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <BugReportIcon fontSize="small" sx={{ color: '#EF4444' }} />
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    <BugReportIcon fontSize="small" sx={{ color: '#f85149', fontSize: 16 }} />
+                    <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
                       {repo.openIssuesCount || 0} issues
                     </Typography>
                   </Box>
@@ -356,19 +368,25 @@ export const RepositoriesPage: React.FC = () => {
                 <Box
                   sx={{
                     pt: 1.5,
-                    borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                    borderTop: '1px solid #21262d',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                   }}
                 >
                   <Chip
-                    label={`branch: ${repo.defaultBranch || 'main'}`}
+                    label={repo.defaultBranch || 'main'}
                     size="small"
                     variant="outlined"
-                    sx={{ fontSize: '0.75rem' }}
+                    sx={{
+                      fontSize: '0.72rem',
+                      fontFamily: 'monospace',
+                      height: 20,
+                      borderColor: '#30363d',
+                      color: 'text.secondary',
+                    }}
                   />
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.72rem' }}>
                     {repo.syncedAt
                       ? `Synced ${new Date(repo.syncedAt).toLocaleDateString()}`
                       : 'Pending sync'}
@@ -381,16 +399,18 @@ export const RepositoriesPage: React.FC = () => {
       )}
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={() => !deleting && setDeleteDialogOpen(false)}>
-        <DialogTitle>Confirm Repository Deletion</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Are you sure you want to delete repository{' '}
-            <strong>{repoToDelete?.fullName || repoToDelete?.name}</strong>?
-            This will remove all indexed issues, pull requests, commits, and AI analysis records for this repository.
+      <Dialog open={deleteDialogOpen} onClose={() => !deleting && setDeleteDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ px: 3, pt: 2.5, pb: 1, fontWeight: 600 }}>Delete Repository</DialogTitle>
+        <DialogContent sx={{ px: 3, py: 1.5 }}>
+          <DialogContentText sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
+            Are you sure you want to delete{' '}
+            <strong style={{ color: '#f0f6fc' }}>
+              {repoToDelete?.fullName || (repoToDelete ? `${repoToDelete.owner}/${repoToDelete.name}` : '')}
+            </strong>
+            ? This will remove the repository, all indexed issues, pull requests, commits, and analysis history from BugPilot. This action cannot be undone.
           </DialogContentText>
         </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
+        <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid', borderColor: 'divider' }}>
           <Button onClick={() => setDeleteDialogOpen(false)} disabled={deleting} color="inherit">
             Cancel
           </Button>
@@ -399,7 +419,11 @@ export const RepositoriesPage: React.FC = () => {
             color="error"
             variant="contained"
             disabled={deleting}
-            startIcon={deleting ? <CircularProgress size={18} color="inherit" /> : null}
+            startIcon={deleting ? <CircularProgress size={16} color="inherit" /> : null}
+            sx={{
+              backgroundColor: '#da3633',
+              '&:hover': { backgroundColor: '#f85149' },
+            }}
           >
             {deleting ? 'Deleting...' : 'Delete Repository'}
           </Button>

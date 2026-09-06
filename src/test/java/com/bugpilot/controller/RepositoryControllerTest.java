@@ -6,6 +6,7 @@ import com.bugpilot.enums.SyncJobStep;
 import com.bugpilot.exception.ConcurrentSyncException;
 import com.bugpilot.exception.GitHubApiException;
 import com.bugpilot.exception.GlobalExceptionHandler;
+import com.bugpilot.exception.ResourceNotFoundException;
 import com.bugpilot.service.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -112,6 +113,30 @@ class RepositoryControllerTest {
                         .principal(userAPrincipal))
                 .andExpect(status().isOk())
                 .andExpect(content().string("Repository deleted successfully."));
+    }
+
+    @Test
+    void deleteRepository_whenNotFound_returns404NotFound() throws Exception {
+        doThrow(new ResourceNotFoundException("Repository", 999L))
+                .when(repositoryService).deleteRepository(999L, "testdev@bugpilot.com");
+
+        mockMvc.perform(delete("/repositories/999")
+                        .principal(userAPrincipal))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    void deleteRepository_whenSyncInProgress_returns409Conflict() throws Exception {
+        doThrow(new ConcurrentSyncException("Cannot delete repository while synchronization is in progress. Please wait for sync to complete.", 42L))
+                .when(repositoryService).deleteRepository(1L, "testdev@bugpilot.com");
+
+        mockMvc.perform(delete("/repositories/1")
+                        .principal(userAPrincipal))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.message").value("Cannot delete repository while synchronization is in progress. Please wait for sync to complete."))
+                .andExpect(jsonPath("$.activeJobId").value(42));
     }
 
     @Test

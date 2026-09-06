@@ -29,19 +29,19 @@ public class RepositorySyncWorker {
     public void executeSync(Long jobId) {
         log.info("Starting background sync execution for SyncJob ID: {}", jobId);
 
-        SyncJob job = persistenceService.findJobById(jobId);
-        if (job == null) {
-            log.error("SyncJob {} not found in database. Aborting worker execution.", jobId);
-            return;
-        }
-
-        Long repositoryId = job.getRepository().getId();
-        String owner = job.getRepository().getOwner();
-        String repoName = job.getRepository().getName();
-        String userEmail = job.getTriggeredBy().getEmail();
-        String actorName = job.getTriggeredBy().getName();
-
         try {
+            SyncJob job = persistenceService.findJobByIdWithAssociations(jobId);
+            if (job == null) {
+                log.error("SyncJob {} not found in database. Aborting worker execution.", jobId);
+                return;
+            }
+
+            Long repositoryId = job.getRepository().getId();
+            String owner = job.getRepository().getOwner();
+            String repoName = job.getRepository().getName();
+            String userEmail = job.getTriggeredBy().getEmail();
+            String actorName = job.getTriggeredBy().getName();
+
             // Step 1: Mark job IN_PROGRESS
             persistenceService.markJobInProgress(jobId);
 

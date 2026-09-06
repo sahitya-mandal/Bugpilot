@@ -78,18 +78,18 @@ export const MainLayout: React.FC = () => {
       <Box sx={{ p: 2.5, display: 'flex', alignItems: 'center', gap: 1.5 }}>
         <Avatar
           sx={{
-            bgcolor: 'primary.main',
-            color: '#fff',
-            width: 38,
-            height: 38,
-            boxShadow: '0 4px 14px 0 rgba(99, 102, 241, 0.4)',
+            bgcolor: '#21262d',
+            color: 'text.primary',
+            width: 36,
+            height: 36,
+            border: '1px solid #30363d',
           }}
         >
           <FlightTakeoffIcon fontSize="small" />
         </Avatar>
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="h6" sx={{ fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1 }}>
               BugPilot
             </Typography>
             <Chip
@@ -98,9 +98,10 @@ export const MainLayout: React.FC = () => {
               sx={{
                 height: 18,
                 fontSize: '0.65rem',
-                fontWeight: 700,
-                bgcolor: 'rgba(99, 102, 241, 0.2)',
+                fontWeight: 600,
+                bgcolor: 'rgba(56, 139, 253, 0.1)',
                 color: 'primary.light',
+                border: '1px solid rgba(56, 139, 253, 0.25)',
               }}
             />
           </Box>
@@ -128,25 +129,25 @@ export const MainLayout: React.FC = () => {
                 }}
                 selected={isSelected}
                 sx={{
-                  borderRadius: 2,
+                  borderRadius: 1.5,
                   px: 2,
-                  py: 1.2,
+                  py: 1.1,
                   '&.Mui-selected': {
-                    bgcolor: 'rgba(99, 102, 241, 0.12)',
+                    bgcolor: 'rgba(56, 139, 253, 0.1)',
                     color: 'primary.light',
                     fontWeight: 600,
                     '& .MuiListItemIcon-root': {
                       color: 'primary.light',
                     },
                     '&:hover': {
-                      bgcolor: 'rgba(99, 102, 241, 0.18)',
+                      bgcolor: 'rgba(56, 139, 253, 0.15)',
                     },
                   },
                 }}
               >
                 <ListItemIcon
                   sx={{
-                    minWidth: 38,
+                    minWidth: 36,
                     color: isSelected ? 'primary.light' : 'text.secondary',
                   }}
                 >
@@ -154,7 +155,7 @@ export const MainLayout: React.FC = () => {
                 </ListItemIcon>
                 <ListItemText
                   primary={
-                    <Typography sx={{ fontSize: '0.9rem', fontWeight: isSelected ? 600 : 500 }}>
+                    <Typography sx={{ fontSize: '0.875rem', fontWeight: isSelected ? 600 : 500 }}>
                       {item.text}
                     </Typography>
                   }
@@ -172,15 +173,15 @@ export const MainLayout: React.FC = () => {
         <Button
           fullWidth
           variant="outlined"
-          color="primary"
+          color="inherit"
           startIcon={<AddIcon />}
           onClick={() => {
             setImportDialogOpen(true);
             if (isMobile) setMobileOpen(false);
           }}
-          sx={{ borderRadius: 2 }}
+          sx={{ borderRadius: 1.5, borderColor: '#30363d', color: 'text.primary' }}
         >
-          Track Repository
+          Import Repository
         </Button>
       </Box>
     </Box>
@@ -189,12 +190,12 @@ export const MainLayout: React.FC = () => {
   const getRoleChipColor = (role?: string) => {
     switch (role) {
       case 'ADMIN':
-        return { bg: 'rgba(239, 68, 68, 0.15)', color: '#EF4444' };
+        return { bg: 'rgba(248, 81, 73, 0.15)', color: '#f85149', border: '1px solid rgba(248, 81, 73, 0.3)' };
       case 'TESTER':
-        return { bg: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B' };
+        return { bg: 'rgba(210, 153, 34, 0.15)', color: '#d29922', border: '1px solid rgba(210, 153, 34, 0.3)' };
       case 'DEVELOPER':
       default:
-        return { bg: 'rgba(99, 102, 241, 0.15)', color: '#818CF8' };
+        return { bg: 'rgba(56, 139, 253, 0.15)', color: '#58a6ff', border: '1px solid rgba(56, 139, 253, 0.3)' };
     }
   };
 
@@ -210,7 +211,7 @@ export const MainLayout: React.FC = () => {
           width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
           ml: { md: `${DRAWER_WIDTH}px` },
           bgcolor: 'background.paper',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          borderBottom: '1px solid #30363d',
           color: 'text.primary',
         }}
       >
@@ -225,8 +226,8 @@ export const MainLayout: React.FC = () => {
               <MenuIcon />
             </IconButton>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <CircleIcon sx={{ fontSize: 10, color: '#10B981' }} />
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+              <CircleIcon sx={{ fontSize: 9, color: '#2ea043' }} />
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
                 Spring Boot API Connected
               </Typography>
             </Box>
@@ -234,16 +235,6 @@ export const MainLayout: React.FC = () => {
 
           {/* User Profile & Actions */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Button
-              variant="contained"
-              size="small"
-              startIcon={<AddIcon />}
-              onClick={() => setImportDialogOpen(true)}
-              sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
-            >
-              Import Repo
-            </Button>
-
             <Box
               onClick={(e) => setUserMenuAnchor(e.currentTarget)}
               sx={{

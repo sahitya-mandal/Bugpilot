@@ -69,4 +69,65 @@ class SyncJobStartupCleanupTest {
 
         verify(syncJobRepository, never()).save(any(SyncJob.class));
     }
+
+    @Test
+    void isJobOrphaned_whenFreshJob_returnsFalse() {
+        SyncJob job = new SyncJob();
+        job.setStatus(SyncJobStatus.QUEUED);
+        job.setCreatedAt(java.time.LocalDateTime.now());
+
+        assertFalse(startupCleanup.isJobOrphaned(job));
+    }
+
+    @Test
+    void isJobOrphaned_whenQueuedAndOlderThanThreshold_returnsTrue() {
+        SyncJob job = new SyncJob();
+        job.setStatus(SyncJobStatus.QUEUED);
+        job.setCreatedAt(java.time.LocalDateTime.now().minusMinutes(6));
+
+        assertTrue(startupCleanup.isJobOrphaned(job));
+    }
+
+    @Test
+    void isJobOrphaned_whenInProgressAndOlderThanThreshold_returnsTrue() {
+        SyncJob job = new SyncJob();
+        job.setStatus(SyncJobStatus.IN_PROGRESS);
+        job.setCreatedAt(java.time.LocalDateTime.now().minusMinutes(20));
+        job.setStartedAt(java.time.LocalDateTime.now().minusMinutes(16));
+
+        assertTrue(startupCleanup.isJobOrphaned(job));
+    }
+
+    @Test
+    void recoverJobIfOrphaned_whenOrphaned_marksAsFailedAndSaves() {
+        SyncJob job = new SyncJob();
+        job.setId(10L);
+        job.setStatus(SyncJobStatus.QUEUED);
+        job.setCreatedAt(java.time.LocalDateTime.now().minusMinutes(10));
+
+        when(syncJobRepository.findById(10L)).thenReturn(java.util.Optional.of(job));
+        when(syncJobRepository.save(any(SyncJob.class))).thenAnswer(i -> i.getArgument(0));
+
+        boolean recovered = startupCleanup.recoverJobIfOrphaned(job);
+
+        assertTrue(recovered);
+        assertEquals(SyncJobStatus.FAILED, job.getStatus());
+        assertEquals("Sync timed out or was orphaned without an active worker.", job.getErrorMessage());
+        assertNotNull(job.getCompletedAt());
+        verify(syncJobRepository).save(job);
+    }
+
+    @Test
+    void recoverJobIfOrphaned_whenFresh_doesNothingAndReturnsFalse() {
+        SyncJob job = new SyncJob();
+        job.setId(10L);
+        job.setStatus(SyncJobStatus.QUEUED);
+        job.setCreatedAt(java.time.LocalDateTime.now().minusSeconds(30));
+
+        boolean recovered = startupCleanup.recoverJobIfOrphaned(job);
+
+        assertFalse(recovered);
+        assertEquals(SyncJobStatus.QUEUED, job.getStatus());
+        verify(syncJobRepository, never()).save(any(SyncJob.class));
+    }
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, CardContent, Typography, Box, Avatar } from '@mui/material';
+import { Card, CardContent, Typography, Box } from '@mui/material';
 
 interface StatCardProps {
   title: string;
@@ -14,7 +14,6 @@ export const StatCard: React.FC<StatCardProps> = ({
   value,
   subtitle,
   icon,
-  color = '#6366F1',
 }) => {
   return (
     <Card
@@ -23,47 +22,51 @@ export const StatCard: React.FC<StatCardProps> = ({
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
-        position: 'relative',
-        overflow: 'hidden',
-        transition: 'transform 0.15s ease-in-out, box-shadow 0.15s ease-in-out',
+        backgroundColor: '#161b22',
+        border: '1px solid #30363d',
+        borderRadius: 1.5,
+        boxShadow: 'none',
+        transition: 'border-color 0.15s ease',
         '&:hover': {
-          transform: 'translateY(-2px)',
-          boxShadow: `0 8px 24px -4px rgba(0, 0, 0, 0.4), 0 0 0 1px ${color}33`,
+          borderColor: '#8b949e',
         },
       }}
     >
-      <Box
-        sx={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 3,
-          backgroundColor: color,
-        }}
-      />
       <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-          <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+              color: 'text.secondary',
+              fontSize: '0.72rem',
+            }}
+          >
             {title}
           </Typography>
-          <Avatar
-            variant="rounded"
+          <Box
             sx={{
-              backgroundColor: `${color}1A`,
-              color: color,
-              width: 40,
-              height: 40,
+              color: 'text.secondary',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 32,
+              height: 32,
+              borderRadius: 1,
+              bgcolor: 'rgba(255, 255, 255, 0.04)',
+              border: '1px solid #30363d',
             }}
           >
             {icon}
-          </Avatar>
+          </Box>
         </Box>
-        <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
+        <Typography variant="h4" sx={{ fontWeight: 650, color: 'text.primary', mb: 0.5, letterSpacing: '-0.02em' }}>
           {value}
         </Typography>
         {subtitle && (
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
             {subtitle}
           </Typography>
         )}

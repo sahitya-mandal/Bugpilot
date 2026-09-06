@@ -7,6 +7,7 @@ import com.bugpilot.entity.User;
 import com.bugpilot.exception.ResourceNotFoundException;
 import com.bugpilot.repository.IssueRepository;
 import com.bugpilot.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +22,7 @@ public class IssueService {
     private final IssueRepository issueRepository;
     private final UserRepository userRepository;
 
+    @Autowired
     public IssueService(IssueRepository issueRepository, UserRepository userRepository) {
         this.issueRepository = issueRepository;
         this.userRepository = userRepository;

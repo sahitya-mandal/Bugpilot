@@ -13,6 +13,7 @@ import com.bugpilot.repository.SyncJobRepository;
 import com.bugpilot.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.task.TaskRejectedException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
@@ -39,19 +40,23 @@ public class RepositorySyncService {
     private final RepositoryService repositoryService;
     private final RepositorySyncPersistenceService persistenceService;
     private final RepositorySyncWorker syncWorker;
+    private final SyncJobStartupCleanup syncJobStartupCleanup;
 
+    @Autowired
     public RepositorySyncService(SyncJobRepository syncJobRepository,
                                  RepoRepository repoRepository,
                                  UserRepository userRepository,
                                  RepositoryService repositoryService,
                                  RepositorySyncPersistenceService persistenceService,
-                                 RepositorySyncWorker syncWorker) {
+                                 RepositorySyncWorker syncWorker,
+                                 SyncJobStartupCleanup syncJobStartupCleanup) {
         this.syncJobRepository = syncJobRepository;
         this.repoRepository = repoRepository;
         this.userRepository = userRepository;
         this.repositoryService = repositoryService;
         this.persistenceService = persistenceService;
         this.syncWorker = syncWorker;
+        this.syncJobStartupCleanup = syncJobStartupCleanup;
     }
 
     private User getAuthenticatedUser(String userEmail) {
@@ -61,6 +66,70 @@ public class RepositorySyncService {
         return userRepository.findFirstByEmailOrderByIdDesc(userEmail)
                 .or(() -> userRepository.findByEmail(userEmail))
                 .orElseThrow(() -> new AccessDeniedException("Access denied: user not found"));
+    }
+
+    public String[] normalizeAndValidateCoordinates(String rawOwner, String rawName) {
+        if (rawOwner == null || rawOwner.isBlank()) {
+            throw new IllegalArgumentException("Repository owner is required");
+        }
+        if (rawName == null || rawName.isBlank()) {
+            throw new IllegalArgumentException("Repository name is required");
+        }
+
+        String owner = rawOwner.trim();
+        String name = rawName.trim();
+
+        // If owner looks like a URL or contains github.com, extract owner and repo
+        if (owner.startsWith("http://") || owner.startsWith("https://") || owner.contains("github.com")) {
+            String stripped = owner.replaceFirst("^https?://[^/]+/", "");
+            stripped = stripped.replaceFirst("\\.git$", "");
+            String[] parts = stripped.split("/");
+            if (parts.length >= 2 && !parts[0].isBlank() && !parts[1].isBlank()) {
+                owner = parts[0].trim();
+                if (name.isBlank() || name.equalsIgnoreCase(parts[1].trim())) {
+                    name = parts[1].trim();
+                }
+            }
+        } else if (owner.contains("/")) {
+            String stripped = owner.replaceFirst("\\.git$", "");
+            String[] parts = stripped.split("/");
+            if (parts.length == 2 && !parts[0].isBlank() && !parts[1].isBlank()) {
+                if (name.equalsIgnoreCase(parts[1].trim())) {
+                    owner = parts[0].trim();
+                    name = parts[1].trim();
+                } else {
+                    throw new IllegalArgumentException("Invalid repository owner: '" + rawOwner
+                            + "'. Owner must not contain '/' (enter username or organization only).");
+                }
+            } else {
+                throw new IllegalArgumentException("Invalid repository owner: '" + rawOwner
+                        + "'. Owner must not contain '/' (enter username or organization only).");
+            }
+        }
+
+        if (owner.contains("/")) {
+            throw new IllegalArgumentException("Repository owner must not contain '/'");
+        }
+        if (name.contains("/")) {
+            throw new IllegalArgumentException("Repository name must not contain '/'");
+        }
+
+        return new String[]{owner, name};
+    }
+
+    void checkActiveJob(Long repositoryId) {
+        Optional<SyncJob> activeJob = syncJobRepository.findFirstByRepositoryIdAndStatusInOrderByCreatedAtDesc(
+                repositoryId, List.of(SyncJobStatus.QUEUED, SyncJobStatus.IN_PROGRESS)
+        );
+        if (activeJob.isPresent()) {
+            SyncJob job = activeJob.get();
+            if (syncJobStartupCleanup != null && syncJobStartupCleanup.recoverJobIfOrphaned(job)) {
+                log.info("Recovered orphaned sync job {} for repository {}; proceeding with request",
+                        job.getId(), repositoryId);
+                return;
+            }
+            throw new ConcurrentSyncException(job.getId());
+        }
     }
 
     public SyncJobResponse queueSync(Long repositoryId, String userEmail) {
@@ -77,12 +146,7 @@ public class RepositorySyncService {
         }
 
         // Concurrency protection: Check for active job while holding repository row lock
-        Optional<SyncJob> activeJob = syncJobRepository.findFirstByRepositoryIdAndStatusInOrderByCreatedAtDesc(
-                repositoryId, List.of(SyncJobStatus.QUEUED, SyncJobStatus.IN_PROGRESS)
-        );
-        if (activeJob.isPresent()) {
-            throw new ConcurrentSyncException(activeJob.get().getId());
-        }
+        checkActiveJob(repositoryId);
 
         // Create and persist job with status QUEUED
         SyncJob job;
@@ -90,10 +154,8 @@ public class RepositorySyncService {
             job = persistenceService.createSyncJob(repository, user);
         } catch (DataIntegrityViolationException e) {
             log.warn("Database constraint violation creating SyncJob for repository {}: {}", repositoryId, e.getMessage());
-            Optional<SyncJob> active = syncJobRepository.findFirstByRepositoryIdAndStatusInOrderByCreatedAtDesc(
-                    repositoryId, List.of(SyncJobStatus.QUEUED, SyncJobStatus.IN_PROGRESS)
-            );
-            throw new ConcurrentSyncException(active.map(SyncJob::getId).orElse(null));
+            checkActiveJob(repositoryId);
+            throw new ConcurrentSyncException(null);
         }
 
         Long jobId = job.getId();
@@ -107,8 +169,9 @@ public class RepositorySyncService {
     public SyncJobResponse queueImport(RepositoryRequest request, String userEmail) {
         User user = getAuthenticatedUser(userEmail);
 
-        String owner = request.getOwner().trim();
-        String name = request.getName().trim();
+        String[] coords = normalizeAndValidateCoordinates(request.getOwner(), request.getName());
+        String owner = coords[0];
+        String name = coords[1];
 
         // Check if repository already exists (with row lock if present)
         Optional<Repository> existing = repoRepository.findByOwnerAndNameForUpdate(owner, name);
@@ -121,12 +184,7 @@ public class RepositorySyncService {
                 throw new AccessDeniedException("Access denied: Repository is already registered by another user");
             }
             // Check for active job while holding repository lock
-            Optional<SyncJob> activeJob = syncJobRepository.findFirstByRepositoryIdAndStatusInOrderByCreatedAtDesc(
-                    repository.getId(), List.of(SyncJobStatus.QUEUED, SyncJobStatus.IN_PROGRESS)
-            );
-            if (activeJob.isPresent()) {
-                throw new ConcurrentSyncException(activeJob.get().getId());
-            }
+            checkActiveJob(repository.getId());
         } else {
             // New repository creation: serialize across JVM by normalized repo key
             String lockKey = ("repo-import:" + owner.toLowerCase() + "/" + name.toLowerCase()).intern();
@@ -137,12 +195,7 @@ public class RepositorySyncService {
                     if (repository.getUser() != null && !repository.getUser().getId().equals(user.getId())) {
                         throw new AccessDeniedException("Access denied: Repository is already registered by another user");
                     }
-                    Optional<SyncJob> activeJob = syncJobRepository.findFirstByRepositoryIdAndStatusInOrderByCreatedAtDesc(
-                            repository.getId(), List.of(SyncJobStatus.QUEUED, SyncJobStatus.IN_PROGRESS)
-                    );
-                    if (activeJob.isPresent()) {
-                        throw new ConcurrentSyncException(activeJob.get().getId());
-                    }
+                    checkActiveJob(repository.getId());
                 } else {
                     repository = new Repository();
                     repository.setOwner(owner);
@@ -169,10 +222,8 @@ public class RepositorySyncService {
             job = persistenceService.createSyncJob(repository, user);
         } catch (DataIntegrityViolationException e) {
             log.warn("Database constraint violation creating SyncJob for repository {}: {}", repository.getId(), e.getMessage());
-            Optional<SyncJob> active = syncJobRepository.findFirstByRepositoryIdAndStatusInOrderByCreatedAtDesc(
-                    repository.getId(), List.of(SyncJobStatus.QUEUED, SyncJobStatus.IN_PROGRESS)
-            );
-            throw new ConcurrentSyncException(active.map(SyncJob::getId).orElse(null));
+            checkActiveJob(repository.getId());
+            throw new ConcurrentSyncException(null);
         }
 
         Long jobId = job.getId();
@@ -242,13 +293,23 @@ public class RepositorySyncService {
                 .toList();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Optional<SyncJobResponse> getActiveJobForRepository(Long repositoryId, String userEmail) {
         // Enforce ownership check via RepositoryService
         repositoryService.getRepositoryEntityForUser(repositoryId, userEmail);
 
-        return syncJobRepository.findFirstByRepositoryIdAndStatusInOrderByCreatedAtDesc(
+        Optional<SyncJob> activeJob = syncJobRepository.findFirstByRepositoryIdAndStatusInOrderByCreatedAtDesc(
                 repositoryId, List.of(SyncJobStatus.QUEUED, SyncJobStatus.IN_PROGRESS)
-        ).map(job -> SyncJobResponse.fromEntity(job, null));
+        );
+        if (activeJob.isPresent()) {
+            SyncJob job = activeJob.get();
+            if (syncJobStartupCleanup != null && syncJobStartupCleanup.recoverJobIfOrphaned(job)) {
+                log.info("Recovered orphaned sync job {} for repository {} during active job check",
+                        job.getId(), repositoryId);
+                return Optional.empty();
+            }
+            return Optional.of(SyncJobResponse.fromEntity(job, null));
+        }
+        return Optional.empty();
     }
 }

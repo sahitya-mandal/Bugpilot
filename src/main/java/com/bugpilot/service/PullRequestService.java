@@ -7,6 +7,7 @@ import com.bugpilot.entity.User;
 import com.bugpilot.exception.ResourceNotFoundException;
 import com.bugpilot.repository.PullRequestRepository;
 import com.bugpilot.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +22,7 @@ public class PullRequestService {
     private final PullRequestRepository pullRequestRepository;
     private final UserRepository userRepository;
 
+    @Autowired
     public PullRequestService(PullRequestRepository pullRequestRepository, UserRepository userRepository) {
         this.pullRequestRepository = pullRequestRepository;
         this.userRepository = userRepository;

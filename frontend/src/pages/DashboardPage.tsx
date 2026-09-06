@@ -36,14 +36,12 @@ import SyncIcon from '@mui/icons-material/Sync';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
-import AddIcon from '@mui/icons-material/Add';
 
 import { useAuth } from '../context/AuthContext';
 import repositoryService from '../services/repositoryService';
 import analyticsService from '../services/analyticsService';
 import StatCard from '../components/StatCard';
 import EmptyState from '../components/EmptyState';
-import ImportRepoDialog from '../components/ImportRepoDialog';
 import type { Repository, Activity } from '../types';
 
 export const DashboardPage: React.FC = () => {
@@ -55,7 +53,6 @@ export const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<number | null>(null);
-  const [importModalOpen, setImportModalOpen] = useState<boolean>(false);
 
   // Metrics
   const [stats, setStats] = useState({
@@ -226,14 +223,6 @@ export const DashboardPage: React.FC = () => {
           >
             Refresh
           </Button>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={() => setImportModalOpen(true)}
-          >
-            Track Repository
-          </Button>
         </Box>
       </Box>
 
@@ -326,9 +315,7 @@ export const DashboardPage: React.FC = () => {
               <EmptyState
                 icon={<FolderSpecialIcon sx={{ fontSize: 48 }} />}
                 title="No Repositories Tracked Yet"
-                description="Import your first GitHub repository to start collecting commits, triaging bugs, and running AI reviews."
-                actionText="Track Repository"
-                onAction={() => setImportModalOpen(true)}
+                description="Import your first GitHub repository using '+ Import Repository' in the sidebar to start collecting commits, triaging bugs, and running AI reviews."
               />
             ) : (
               <TableContainer component={Paper} variant="outlined">
@@ -458,12 +445,6 @@ export const DashboardPage: React.FC = () => {
         </Card>
       </Box>
 
-      {/* Import Repo Dialog */}
-      <ImportRepoDialog
-        open={importModalOpen}
-        onClose={() => setImportModalOpen(false)}
-        onSuccess={() => loadDashboardData()}
-      />
     </Box>
   );
 };

@@ -21,9 +21,15 @@ import {
   Link,
   LinearProgress,
   Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SyncIcon from '@mui/icons-material/Sync';
+import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
 import CallSplitIcon from '@mui/icons-material/CallSplit';
@@ -63,6 +69,8 @@ export const RepositoryDetailPage: React.FC = () => {
   const [repository, setRepository] = useState<Repository | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [syncing, setSyncing] = useState<boolean>(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false);
+  const [deleting, setDeleting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -203,6 +211,24 @@ export const RepositoryDetailPage: React.FC = () => {
     setPrModalOpen(true);
   };
 
+  const handleDeleteRepo = async () => {
+    if (!repoId) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await repositoryService.deleteRepo(repoId);
+      navigate('/repositories');
+    } catch (err: unknown) {
+      setDeleting(false);
+      setDeleteDialogOpen(false);
+      const maybeAxiosErr = err as { response?: { data?: { message?: string } }; message?: string };
+      const message =
+        maybeAxiosErr?.response?.data?.message ||
+        (err instanceof Error ? err.message : 'Failed to delete repository.');
+      setError(message);
+    }
+  };
+
   const filteredIssues = issues.filter((iss) => {
     if (issueFilter === 'ALL') return true;
     return iss.state === issueFilter;
@@ -247,29 +273,51 @@ export const RepositoryDetailPage: React.FC = () => {
           All Repositories
         </Button>
 
-        <Box sx={{ display: 'flex', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
           <Button
             variant="outlined"
-            startIcon={syncing ? <CircularProgress size={18} color="inherit" /> : <SyncIcon />}
+            size="small"
+            startIcon={syncing ? <CircularProgress size={16} color="inherit" /> : <SyncIcon fontSize="small" />}
             onClick={handleSync}
-            disabled={syncing}
+            disabled={syncing || deleting}
+            sx={{ borderColor: '#30363d', color: 'text.primary' }}
           >
             {syncing ? 'Syncing...' : 'Sync Now'}
           </Button>
 
           {repository.htmlUrl && (
             <Button
-              variant="contained"
-              color="primary"
+              variant="outlined"
+              size="small"
               endIcon={<OpenInNewIcon fontSize="small" />}
               component={Link}
               href={repository.htmlUrl}
               target="_blank"
               rel="noopener noreferrer"
+              sx={{ borderColor: '#30363d', color: 'text.primary' }}
             >
               GitHub
             </Button>
           )}
+
+          <Button
+            variant="outlined"
+            color="error"
+            size="small"
+            startIcon={<DeleteOutlinedIcon fontSize="small" />}
+            onClick={() => setDeleteDialogOpen(true)}
+            disabled={syncing || deleting}
+            sx={{
+              borderColor: 'rgba(248, 81, 73, 0.4)',
+              color: '#ff7b72',
+              '&:hover': {
+                borderColor: '#f85149',
+                backgroundColor: 'rgba(248, 81, 73, 0.1)',
+              },
+            }}
+          >
+            Delete Repository
+          </Button>
         </Box>
       </Box>
 
@@ -937,6 +985,43 @@ export const RepositoryDetailPage: React.FC = () => {
         onClose={() => setPrModalOpen(false)}
         onAnalyzed={() => loadTabData(1)}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => !deleting && setDeleteDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ px: 3, pt: 2.5, pb: 1, fontWeight: 600 }}>Delete Repository</DialogTitle>
+        <DialogContent sx={{ px: 3, py: 1.5 }}>
+          <DialogContentText sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
+            Are you sure you want to delete{' '}
+            <strong style={{ color: '#f0f6fc' }}>
+              {repository.fullName || `${repository.owner}/${repository.name}`}
+            </strong>
+            ? This will remove the repository, all indexed issues, pull requests, commits, and analysis history from BugPilot. This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+          <Button onClick={() => setDeleteDialogOpen(false)} disabled={deleting} color="inherit">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleDeleteRepo}
+            color="error"
+            variant="contained"
+            disabled={deleting}
+            startIcon={deleting ? <CircularProgress size={16} color="inherit" /> : null}
+            sx={{
+              backgroundColor: '#da3633',
+              '&:hover': { backgroundColor: '#f85149' },
+            }}
+          >
+            {deleting ? 'Deleting...' : 'Delete Repository'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

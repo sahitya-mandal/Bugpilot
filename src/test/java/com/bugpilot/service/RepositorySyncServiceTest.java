@@ -52,6 +52,9 @@ class RepositorySyncServiceTest {
     @Mock
     private RepositorySyncWorker syncWorker;
 
+    @Mock
+    private SyncJobStartupCleanup syncJobStartupCleanup;
+
     @InjectMocks
     private RepositorySyncService repositorySyncService;
 
@@ -499,5 +502,76 @@ class RepositorySyncServiceTest {
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
         }
+    }
+
+    @Test
+    void queueImport_whenOwnerContainsSlashMatchingRepo_normalizesAndImports() {
+        when(userRepository.findFirstByEmailOrderByIdDesc("dev@bugpilot.com")).thenReturn(Optional.of(owner));
+        when(repoRepository.findByOwnerAndNameForUpdate("sahitya-mandal", "ai-career-guidance")).thenReturn(Optional.empty());
+
+        Repository savedRepo = new Repository();
+        savedRepo.setId(5L);
+        savedRepo.setOwner("sahitya-mandal");
+        savedRepo.setName("ai-career-guidance");
+        savedRepo.setUser(owner);
+        when(repoRepository.save(any(Repository.class))).thenReturn(savedRepo);
+
+        SyncJob createdJob = new SyncJob(savedRepo, owner);
+        createdJob.setId(301L);
+        when(persistenceService.createSyncJob(savedRepo, owner)).thenReturn(createdJob);
+
+        RepositoryRequest request = new RepositoryRequest("sahitya-mandal/ai-career-guidance", "ai-career-guidance");
+        SyncJobResponse response = repositorySyncService.queueImport(request, "dev@bugpilot.com");
+
+        assertNotNull(response);
+        assertEquals(301L, response.getJobId());
+        verify(repoRepository, times(2)).findByOwnerAndNameForUpdate("sahitya-mandal", "ai-career-guidance");
+    }
+
+    @Test
+    void queueImport_whenOwnerContainsInvalidSlash_throwsIllegalArgumentException() {
+        when(userRepository.findFirstByEmailOrderByIdDesc("dev@bugpilot.com")).thenReturn(Optional.of(owner));
+
+        RepositoryRequest request = new RepositoryRequest("sahitya-mandal/other-repo", "ai-career-guidance");
+
+        assertThrows(IllegalArgumentException.class,
+                () -> repositorySyncService.queueImport(request, "dev@bugpilot.com"));
+        verifyNoInteractions(syncWorker);
+    }
+
+    @Test
+    void queueImport_whenNameContainsSlash_throwsIllegalArgumentException() {
+        when(userRepository.findFirstByEmailOrderByIdDesc("dev@bugpilot.com")).thenReturn(Optional.of(owner));
+
+        RepositoryRequest request = new RepositoryRequest("sahitya-mandal", "invalid/repo");
+
+        assertThrows(IllegalArgumentException.class,
+                () -> repositorySyncService.queueImport(request, "dev@bugpilot.com"));
+        verifyNoInteractions(syncWorker);
+    }
+
+    @Test
+    void queueSync_whenActiveJobIsOrphaned_recoversJobAndQueuesNewSync() {
+        when(userRepository.findFirstByEmailOrderByIdDesc("dev@bugpilot.com")).thenReturn(Optional.of(owner));
+        when(repoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(repository));
+
+        SyncJob orphanedJob = new SyncJob(repository, owner);
+        orphanedJob.setId(99L);
+        orphanedJob.setStatus(SyncJobStatus.QUEUED);
+
+        when(syncJobRepository.findFirstByRepositoryIdAndStatusInOrderByCreatedAtDesc(eq(1L), anyCollection()))
+                .thenReturn(Optional.of(orphanedJob));
+        when(syncJobStartupCleanup.recoverJobIfOrphaned(orphanedJob)).thenReturn(true);
+
+        SyncJob newJob = new SyncJob(repository, owner);
+        newJob.setId(107L);
+        when(persistenceService.createSyncJob(repository, owner)).thenReturn(newJob);
+
+        SyncJobResponse response = repositorySyncService.queueSync(1L, "dev@bugpilot.com");
+
+        assertNotNull(response);
+        assertEquals(107L, response.getJobId());
+        verify(syncJobStartupCleanup).recoverJobIfOrphaned(orphanedJob);
+        verify(persistenceService).createSyncJob(repository, owner);
     }
 }

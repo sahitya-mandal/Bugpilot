@@ -59,7 +59,7 @@ class RepositorySyncWorkerTest {
 
     @Test
     void executeSync_successfulLifecycle_fetchesOutsideTxnAndPersistsInShortTxns() {
-        when(persistenceService.findJobById(100L)).thenReturn(job);
+        when(persistenceService.findJobByIdWithAssociations(100L)).thenReturn(job);
         when(gitHubService.fetchRepositoryMetadata("octocat", "Hello-World"))
                 .thenReturn(Map.of("full_name", "octocat/Hello-World", "id", 12345));
         when(gitHubService.getPageSize()).thenReturn(100);
@@ -103,7 +103,7 @@ class RepositorySyncWorkerTest {
 
     @Test
     void executeSync_whenGitHub401_marksJobFailedWithoutExposingSecret() {
-        when(persistenceService.findJobById(100L)).thenReturn(job);
+        when(persistenceService.findJobByIdWithAssociations(100L)).thenReturn(job);
         when(gitHubService.fetchRepositoryMetadata("octocat", "Hello-World"))
                 .thenThrow(new GitHubApiException("GitHub API authentication failed: Invalid or expired GitHub credentials", 401));
         when(gitHubService.sanitize(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -121,7 +121,7 @@ class RepositorySyncWorkerTest {
 
     @Test
     void executeSync_whenGitHub429RateLimit_marksJobFailedWithResetTime() {
-        when(persistenceService.findJobById(100L)).thenReturn(job);
+        when(persistenceService.findJobByIdWithAssociations(100L)).thenReturn(job);
         GitHubApiException rateLimitEx = new GitHubApiException("GitHub API rate limit exceeded", 429, true, 0, 1741234567L, 60L);
         when(gitHubService.fetchRepositoryMetadata("octocat", "Hello-World")).thenThrow(rateLimitEx);
         when(gitHubService.sanitize(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -138,7 +138,7 @@ class RepositorySyncWorkerTest {
 
     @Test
     void executeSync_whenPRDetailFails_marksJobFailed() {
-        when(persistenceService.findJobById(100L)).thenReturn(job);
+        when(persistenceService.findJobByIdWithAssociations(100L)).thenReturn(job);
         when(gitHubService.fetchRepositoryMetadata("octocat", "Hello-World")).thenReturn(Map.of("full_name", "octocat/Hello-World"));
         when(gitHubService.getPageSize()).thenReturn(100);
         when(gitHubService.fetchIssuesPage(anyString(), anyString(), eq(1), eq(100))).thenReturn(List.of());
@@ -164,7 +164,7 @@ class RepositorySyncWorkerTest {
 
     @Test
     void executeSync_sanitizesTokenInErrorMessage() {
-        when(persistenceService.findJobById(100L)).thenReturn(job);
+        when(persistenceService.findJobByIdWithAssociations(100L)).thenReturn(job);
         when(gitHubService.fetchRepositoryMetadata("octocat", "Hello-World"))
                 .thenThrow(new RuntimeException("Error with token Bearer ghp_SuperSecret12345ABCDE"));
         when(gitHubService.sanitize(anyString()))
@@ -182,7 +182,7 @@ class RepositorySyncWorkerTest {
 
     @Test
     void executeSync_whenPRUnchanged_skipsDetailEndpoint() {
-        when(persistenceService.findJobById(100L)).thenReturn(job);
+        when(persistenceService.findJobByIdWithAssociations(100L)).thenReturn(job);
         when(gitHubService.fetchRepositoryMetadata("octocat", "Hello-World"))
                 .thenReturn(Map.of("full_name", "octocat/Hello-World", "id", 12345));
         when(gitHubService.getPageSize()).thenReturn(100);
@@ -215,5 +215,33 @@ class RepositorySyncWorkerTest {
         verify(gitHubService, never()).fetchPullRequestDetails(anyString(), anyString(), anyInt());
         verify(persistenceService).persistPullRequests(eq(1L), anyList());
         verify(persistenceService).markJobCompleted(100L, 1L, "Dev User");
+    }
+
+    @Test
+    void executeSync_whenUnexpectedExceptionDuringLoading_marksJobFailed() {
+        when(persistenceService.findJobByIdWithAssociations(100L))
+                .thenThrow(new RuntimeException("Simulated lazy loading exception"));
+        when(gitHubService.sanitize(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        worker.executeSync(100L);
+
+        verify(persistenceService).markJobFailed(
+                eq(100L),
+                contains("Simulated lazy loading exception"),
+                eq(502),
+                isNull()
+        );
+        verify(persistenceService, never()).markJobCompleted(anyLong(), anyLong(), anyString());
+    }
+
+    @Test
+    void executeSync_whenJobNotFound_abortsExecutionCleanly() {
+        when(persistenceService.findJobByIdWithAssociations(999L)).thenReturn(null);
+
+        worker.executeSync(999L);
+
+        verify(persistenceService, never()).markJobInProgress(anyLong());
+        verify(persistenceService, never()).markJobFailed(anyLong(), anyString(), any(), any());
+        verify(persistenceService, never()).markJobCompleted(anyLong(), anyLong(), anyString());
     }
 }

@@ -10,6 +10,7 @@ import com.bugpilot.exception.ResourceNotFoundException;
 import com.bugpilot.repository.*;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -54,6 +55,7 @@ public class AIAnalysisService {
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
     }
 
+    @Autowired
     public AIAnalysisService(IssueRepository issueRepository,
                              PullRequestRepository pullRequestRepository,
                              BugAnalysisRepository bugAnalysisRepository,

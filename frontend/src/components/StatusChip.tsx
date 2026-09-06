@@ -21,10 +21,12 @@ export const StatusChip: React.FC<StatusChipProps> = ({ status, size = 'small' }
           label="Open"
           size={size}
           sx={{
-            backgroundColor: 'rgba(16, 185, 129, 0.12)',
-            color: '#10B981',
-            border: '1px solid rgba(16, 185, 129, 0.3)',
-            fontWeight: 600,
+            backgroundColor: 'rgba(46, 160, 67, 0.15)',
+            color: '#3fb950',
+            border: '1px solid rgba(46, 160, 67, 0.4)',
+            fontWeight: 500,
+            borderRadius: 1,
+            '& .MuiChip-icon': { color: '#3fb950' },
           }}
         />
       );
@@ -35,10 +37,12 @@ export const StatusChip: React.FC<StatusChipProps> = ({ status, size = 'small' }
           label="Merged"
           size={size}
           sx={{
-            backgroundColor: 'rgba(139, 92, 246, 0.15)',
-            color: '#A78BFA',
-            border: '1px solid rgba(139, 92, 246, 0.35)',
-            fontWeight: 600,
+            backgroundColor: 'rgba(163, 113, 247, 0.15)',
+            color: '#a371f7',
+            border: '1px solid rgba(163, 113, 247, 0.4)',
+            fontWeight: 500,
+            borderRadius: 1,
+            '& .MuiChip-icon': { color: '#a371f7' },
           }}
         />
       );
@@ -50,10 +54,12 @@ export const StatusChip: React.FC<StatusChipProps> = ({ status, size = 'small' }
           label="Closed"
           size={size}
           sx={{
-            backgroundColor: 'rgba(156, 163, 175, 0.12)',
-            color: '#9CA3AF',
-            border: '1px solid rgba(156, 163, 175, 0.25)',
-            fontWeight: 600,
+            backgroundColor: 'rgba(139, 148, 158, 0.15)',
+            color: '#8b949e',
+            border: '1px solid rgba(139, 148, 158, 0.3)',
+            fontWeight: 500,
+            borderRadius: 1,
+            '& .MuiChip-icon': { color: '#8b949e' },
           }}
         />
       );
